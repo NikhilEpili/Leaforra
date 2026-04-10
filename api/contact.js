@@ -27,8 +27,9 @@ function getSendGridErrorMessage(error) {
 }
 
 export default async function handler(req, res) {
+  Object.entries(corsHeaders).forEach(([key, value]) => res.setHeader(key, value));
+
   if (req.method === 'OPTIONS') {
-    Object.entries(corsHeaders).forEach(([key, value]) => res.setHeader(key, value));
     res.status(200).end();
     return;
   }
