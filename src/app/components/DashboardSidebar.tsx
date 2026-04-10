@@ -1,5 +1,6 @@
-import { Link, useLocation } from 'react-router';
-import { Home, Settings, LogOut } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router';
+import { Home, LogOut } from 'lucide-react';
+import { clearRegisteredUser } from '../auth';
 import { cn } from './ui/utils';
 
 interface SidebarProps {
@@ -8,11 +9,17 @@ interface SidebarProps {
 
 export function DashboardSidebar({ isCollapsed = false }: SidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const menuItems = [
     { icon: Home, label: 'Dashboard', path: '/dashboard' },
-    { icon: Settings, label: 'Settings', path: '/dashboard/settings' },
+   
   ];
+
+  const handleLogout = () => {
+    clearRegisteredUser();
+    navigate('/register', { replace: true });
+  };
 
   return (
     <aside
@@ -59,6 +66,7 @@ export function DashboardSidebar({ isCollapsed = false }: SidebarProps) {
 
       <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10">
         <button
+          onClick={handleLogout}
           className={cn(
             'flex items-center gap-3 px-4 py-3 rounded-lg text-white hover:bg-[#3A7D57] transition-all duration-200 w-full',
             isCollapsed && 'justify-center'

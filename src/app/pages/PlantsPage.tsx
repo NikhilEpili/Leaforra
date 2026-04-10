@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { PlantCard } from '../components/PlantCard';
 import { PlantProblemsChatbot } from '../components/PlantProblemsChatbot';
 import { plantsData } from '../data/plants';
@@ -9,6 +9,8 @@ const filters = ['All', ...new Set(plantsData.map((plant) => plant.tag))];
 export function PlantsPage() {
   const [activeFilter, setActiveFilter] = useState('All');
   const navigate = useNavigate();
+  const location = useLocation();
+  const shouldOpenChatbot = new URLSearchParams(location.search).get('chatbot') === 'open';
 
   const filteredPlants = activeFilter === 'All'
     ? plantsData
@@ -68,7 +70,7 @@ export function PlantsPage() {
         )}
       </div>
 
-      <PlantProblemsChatbot />
+      <PlantProblemsChatbot defaultOpen={shouldOpenChatbot} />
     </div>
   );
 }

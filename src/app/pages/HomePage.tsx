@@ -1,13 +1,21 @@
 import { motion } from 'motion/react';
 import { Link } from 'react-router';
-import { Scan, Bell, TrendingUp, Leaf } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import { Scan, Bell, TrendingUp, Leaf, MessageCircle } from 'lucide-react';
 import { Button } from '../components/Button';
 import { StepBadge } from '../components/StepBadge';
 import { PlantCard } from '../components/PlantCard';
 import { plantsData } from '../data/plants';
 
 export function HomePage() {
-  const featuredPlants = plantsData.filter(plant => plant.featured);
+  const navigate = useNavigate();
+  const featuredPlants = plantsData.filter(plant => plant.featured).slice(0, 3);
+  const sellerWhatsappNumber = import.meta.env.VITE_SELLER_WHATSAPP_NUMBER || '919962789188';
+  const whatsappLink = `https://wa.me/${sellerWhatsappNumber}?text=${encodeURIComponent('Hi, I would like to know more about your plants.')}`;
+
+  const handleViewDetails = (id: string) => {
+    navigate(`/plants/${id}`);
+  };
 
   return (
     <div className="min-h-screen">
@@ -19,6 +27,12 @@ export function HomePage() {
             className="absolute inset-0 bg-cover bg-center"
             style={{
               backgroundImage: 'url(https://images.unsplash.com/photo-1531768758921-efe347c05370?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxib3RhbmljYWwlMjB3YXRlcmNvbG9yJTIwbGVhdmVzfGVufDF8fHx8MTc3NTM3NDM0OXww&ixlib=rb-4.1.0&q=80&w=1080)',
+            }}
+          />
+          <div
+            className="absolute inset-0 bg-cover bg-right md:bg-center opacity-45 mix-blend-multiply"
+            style={{
+              backgroundImage: 'url(https://images.unsplash.com/photo-1463936575829-25148e1db1b8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0cm9waWNhbCUyMHBsYW50c3xlbnwxfHx8fDE3ODIxMjg0NTV8MA&ixlib=rb-4.1.0&q=80&w=1400)',
             }}
           />
           <div className="absolute inset-0 bg-gradient-to-b from-[#F8F5EE]/95 via-[#F8F5EE]/90 to-[#F8F5EE]" />
@@ -43,12 +57,8 @@ export function HomePage() {
                   Explore Plants
                 </Button>
               </Link>
-              <Link to="/store-locator">
-                <Button variant="secondary" className="px-8 py-4 text-lg">
-                  Find Store
-                </Button>
-              </Link>
-              <Link to="/subscribe">
+              
+              <Link to="/about#get-in-touch">
                 <Button variant="ghost" className="text-lg">
                   Subscribe
                 </Button>
@@ -127,7 +137,11 @@ export function HomePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {featuredPlants.map((plant) => (
-              <PlantCard key={plant.id} plant={plant} />
+              <PlantCard
+                key={plant.id}
+                plant={plant}
+                onViewDetails={handleViewDetails}
+              />
             ))}
           </div>
         </div>
@@ -148,15 +162,25 @@ export function HomePage() {
               <p className="text-lg text-white/90 mb-8 max-w-xl mx-auto">
                 Join thousands of plant lovers who've transformed their spaces with Leaforra
               </p>
-              <Link to="/qr-landing">
+              <Link to="/my-garden">
                 <Button variant="pill" className="text-lg px-10 py-4">
-                  Get Started Now
+                  Explore your garden
                 </Button>
               </Link>
             </div>
           </div>
         </div>
       </section>
+
+      <a
+        href={whatsappLink}
+        target="_blank"
+        rel="noreferrer"
+        aria-label="Chat with seller on WhatsApp"
+        className="fixed right-6 bottom-6 z-50 w-14 h-14 rounded-full bg-[#25D366] text-white shadow-2xl shadow-[#1E3D2F]/20 hover:scale-105 transition-transform flex items-center justify-center"
+      >
+        <MessageCircle className="w-7 h-7" />
+      </a>
     </div>
   );
 }

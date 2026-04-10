@@ -111,10 +111,10 @@ export function FeaturesPage() {
               Join our growing community and discover how easy plant care can be
             </p>
             <a
-              href="/qr-landing"
+              href="/my-garden"
               className="inline-block px-10 py-4 bg-[#E8C547] text-[#1E3D2F] rounded-full font-medium text-lg hover:bg-[#F5DFA0] transition-colors shadow-xl"
             >
-              Get Started Free
+              Explore your garden 
             </a>
           </div>
         </motion.div>

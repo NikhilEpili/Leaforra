@@ -5,9 +5,10 @@ interface WateringCountdownProps {
   plantName: string;
   daysLeft: number;
   progress: number; // 0-100
+  hasAlarm?: boolean;
 }
 
-export function WateringCountdown({ plantName, daysLeft, progress }: WateringCountdownProps) {
+export function WateringCountdown({ plantName, daysLeft, progress, hasAlarm = true }: WateringCountdownProps) {
   const circumference = 2 * Math.PI * 40; // radius = 40
   const strokeDashoffset = circumference - (progress / 100) * circumference;
 
@@ -48,12 +49,23 @@ export function WateringCountdown({ plantName, daysLeft, progress }: WateringCou
           <h4 className="text-lg font-display font-semibold text-[#1C2B1E] mb-1">
             {plantName}
           </h4>
-          <p className="text-[#6B7C6E] text-sm">
-            Water in {daysLeft} {daysLeft === 1 ? 'day' : 'days'}
-          </p>
-          <div className="mt-2 inline-block px-3 py-1 bg-[#E8C547] text-[#1E3D2F] rounded-full text-xs font-medium">
-            {progress}% until watering
-          </div>
+          {hasAlarm ? (
+            <>
+              <p className="text-[#6B7C6E] text-sm">
+                Water in {daysLeft} {daysLeft === 1 ? 'day' : 'days'}
+              </p>
+              <div className="mt-2 inline-block px-3 py-1 bg-[#E8C547] text-[#1E3D2F] rounded-full text-xs font-medium">
+                {progress}% until watering
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-[#6B7C6E] text-sm">No watering alarm set</p>
+              <div className="mt-2 inline-block px-3 py-1 bg-[#C8E6D4] text-[#1E3D2F] rounded-full text-xs font-medium">
+                Set alarms in My Garden
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

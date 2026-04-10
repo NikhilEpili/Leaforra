@@ -1,27 +1,75 @@
 import { motion } from 'motion/react';
 import { Leaf, Heart, Globe, Users } from 'lucide-react';
-import { FormInput } from '../components/FormInput';
 import { Button } from '../components/Button';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router';
+import { getRegisteredUser } from '../auth';
 
 export function AboutPage() {
+  const location = useLocation();
+  const adminContactEmail = import.meta.env.VITE_CONTACT_EMAIL || 'contact@leaforra.com';
+  const currentUser = getRegisteredUser();
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
     message: '',
   });
+  const [isSending, setIsSending] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setFormData(prev => ({
       ...prev,
       [e.target.name]: e.target.value,
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert('Message sent! We\'ll get back to you soon.');
-    setFormData({ name: '', email: '', message: '' });
+    setIsSending(true);
+    setSubmitStatus(null);
+
+    if (!currentUser?.name || !currentUser?.email) {
+      setSubmitStatus({
+        type: 'error',
+        message: 'Profile details are missing. Please log out and register again.',
+      });
+      setIsSending(false);
+      return;
+    }
+
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+      const response = await fetch(`${API_BASE_URL}/api/contact`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: currentUser.name.trim(),
+          email: currentUser.email.trim(),
+          message: formData.message.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || 'Failed to send message');
+      }
+
+      setSubmitStatus({
+        type: 'success',
+        message: `Message sent successfully to ${adminContactEmail}.`,
+      });
+      setFormData({ message: '' });
+    } catch (error) {
+      setSubmitStatus({
+        type: 'error',
+        message: error instanceof Error
+          ? error.message
+          : 'Unable to send message right now. Please try again in a moment.',
+      });
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const values = [
@@ -41,6 +89,22 @@ export function AboutPage() {
       description: 'Building a global community of plant enthusiasts helping each other grow.',
     },
   ];
+
+  useEffect(() => {
+    if (location.hash !== '#get-in-touch') {
+      return;
+    }
+
+    const target = document.getElementById('get-in-touch');
+    if (!target) {
+      return;
+    }
+
+    // Delay to ensure layout and motion elements are mounted before scrolling.
+    requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: 'auto', block: 'start' });
+    });
+  }, [location.hash]);
 
   return (
     <div className="min-h-screen pt-32 pb-20 bg-[#F8F5EE]">
@@ -63,16 +127,16 @@ export function AboutPage() {
             </div>
             <div className="space-y-4 text-[#6B7C6E] leading-relaxed">
               <p>
-                Leaforra was born from a simple observation: too many beautiful plants were dying due to 
+                Leaforra was born from a simple observation: too many beautiful plants were dying due to
                 inconsistent care and lack of knowledge. We set out to change that.
               </p>
               <p>
-                Founded in 2024, we've helped thousands of people discover the joy of nurturing plants. 
-                Our smart care system takes the guesswork out of plant parenting, making it accessible 
+                Founded in 2026, we've helped thousands of people discover the joy of nurturing plants.
+                Our smart care system takes the guesswork out of plant parenting, making it accessible
                 to everyone—from complete beginners to seasoned gardeners.
               </p>
               <p>
-                We partner with local nurseries and sustainable growers to bring you the healthiest plants 
+                We partner with local nurseries and sustainable growers to bring you the healthiest plants
                 while supporting our communities and the environment.
               </p>
             </div>
@@ -89,22 +153,22 @@ export function AboutPage() {
                 Our Mission
               </h2>
               <p className="text-white/90 text-lg leading-relaxed mb-8">
-                To make the world greener, one plant at a time. We're building a future where everyone 
-                can experience the wellness benefits of living with plants, supported by technology that 
+                To make the world greener, one plant at a time. We're building a future where everyone
+                can experience the wellness benefits of living with plants, supported by technology that
                 makes care simple and rewarding.
               </p>
               <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
                 <h3 className="text-xl font-display font-semibold text-white mb-3">
-                  Impact So Far
+                  Potential Impact
                 </h3>
                 <div className="grid grid-cols-2 gap-4 text-center">
                   <div>
-                    <p className="text-4xl font-display font-bold text-[#E8C547]">50K+</p>
-                    <p className="text-white/80 text-sm">Happy Plant Parents</p>
+                    <p className="text-4xl font-display font-bold text-[#E8C547]">100K+</p>
+                    <p className="text-white/80 text-sm">Projected Users by 2028</p>
                   </div>
                   <div>
-                    <p className="text-4xl font-display font-bold text-[#E8C547]">200K+</p>
-                    <p className="text-white/80 text-sm">Plants Thriving</p>
+                    <p className="text-4xl font-display font-bold text-[#E8C547]">1M+</p>
+                    <p className="text-white/80 text-sm">Estimated Plant-Care Actions/Year</p>
                   </div>
                 </div>
               </div>
@@ -144,7 +208,7 @@ export function AboutPage() {
         </div>
 
         {/* Contact Section */}
-        <div className="bg-white rounded-3xl p-10 md:p-12 shadow-2xl shadow-[#1E3D2F]/20">
+        <div id="get-in-touch" className="scroll-mt-28 bg-white rounded-3xl p-10 md:p-12 shadow-2xl shadow-[#1E3D2F]/20">
           <div className="max-w-2xl mx-auto">
             <div className="text-center mb-8">
               <h2 className="text-4xl font-display font-bold text-[#1E3D2F] mb-3">
@@ -156,26 +220,9 @@ export function AboutPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <FormInput
-                  label="Name"
-                  name="name"
-                  type="text"
-                  placeholder="Your name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                />
-                <FormInput
-                  label="Email"
-                  name="email"
-                  type="email"
-                  placeholder="your@email.com"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
+              <p className="text-sm text-[#6B7C6E]">
+                Sending as <span className="font-medium text-[#1E3D2F]">{currentUser?.name}</span> ({currentUser?.email})
+              </p>
 
               <div>
                 <label className="block mb-2 text-sm font-medium text-[#1C2B1E] uppercase tracking-wider">
@@ -192,8 +239,14 @@ export function AboutPage() {
                 />
               </div>
 
-              <Button variant="primary" type="submit" className="w-full py-4">
-                Send Message
+              {submitStatus && (
+                <p className={`text-sm ${submitStatus.type === 'success' ? 'text-[#3A7D57]' : 'text-red-600'}`}>
+                  {submitStatus.message}
+                </p>
+              )}
+
+              <Button variant="primary" type="submit" className="w-full py-4" disabled={isSending}>
+                {isSending ? 'Sending...' : 'Send Message'}
               </Button>
             </form>
           </div>

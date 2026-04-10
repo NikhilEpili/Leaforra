@@ -1,14 +1,8 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Bell, CheckCircle2, Droplets, Flower2, Plus, Trash2, UserRound } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Bell, CheckCircle2, Droplets, Flower2, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../components/Button';
-import { FormInput } from '../components/FormInput';
+import { fetchOwnedPlants, getRegisteredUser, persistOwnedPlants } from '../auth';
 import { plantsData } from '../data/plants';
-
-type GardenProfile = {
-  name: string;
-  phone: string;
-  email: string;
-};
 
 type WateringAlarm = {
   id: string;
@@ -19,9 +13,9 @@ type WateringAlarm = {
 };
 
 const STORAGE_KEYS = {
-  profile: 'leaforra.garden.profile',
   ownedPlants: 'leaforra.garden.ownedPlants',
   alarms: 'leaforra.garden.alarms',
+  wateringLog: 'leaforra.garden.wateringLog',
 };
 
 const getTodayKey = () => {
@@ -31,21 +25,27 @@ const getTodayKey = () => {
   return `${now.getFullYear()}-${month}-${day}`;
 };
 
-const getCurrentTimeKey = () => {
-  const now = new Date();
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  return `${hours}:${minutes}`;
+const toMinutes = (time: string) => {
+  const [hours, minutes] = time.split(':').map((part) => Number.parseInt(part, 10));
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return null;
+  }
+  return hours * 60 + minutes;
 };
+
+const canUseNotifications = () =>
+  typeof window !== 'undefined' && 'Notification' in window;
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') {
     return fallback;
   }
+
   const saved = window.localStorage.getItem(key);
   if (!saved) {
     return fallback;
   }
+
   try {
     return JSON.parse(saved) as T;
   } catch {
@@ -53,10 +53,22 @@ function loadFromStorage<T>(key: string, fallback: T): T {
   }
 }
 
+function appendWateringLogDay(dayKey: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const existing = loadFromStorage<string[]>(STORAGE_KEYS.wateringLog, []);
+  if (existing.includes(dayKey)) {
+    return;
+  }
+
+  window.localStorage.setItem(STORAGE_KEYS.wateringLog, JSON.stringify([...existing, dayKey]));
+}
+
 export function MyGardenPage() {
-  const [profile, setProfile] = useState<GardenProfile | null>(
-    loadFromStorage<GardenProfile | null>(STORAGE_KEYS.profile, null)
-  );
+  const profile = getRegisteredUser();
+  const [hasLoadedRemotePlants, setHasLoadedRemotePlants] = useState(false);
   const [ownedPlantIds, setOwnedPlantIds] = useState<string[]>(
     loadFromStorage<string[]>(STORAGE_KEYS.ownedPlants, [])
   );
@@ -64,36 +76,115 @@ export function MyGardenPage() {
     loadFromStorage<WateringAlarm[]>(STORAGE_KEYS.alarms, [])
   );
 
-  const [formName, setFormName] = useState(profile?.name ?? '');
-  const [formPhone, setFormPhone] = useState(profile?.phone ?? '');
-  const [formEmail, setFormEmail] = useState(profile?.email ?? '');
-  const [formError, setFormError] = useState('');
-
   const [selectedPlantId, setSelectedPlantId] = useState(plantsData[0]?.id ?? '');
   const [alarmPlantId, setAlarmPlantId] = useState('');
   const [alarmTime, setAlarmTime] = useState('08:00');
 
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(
-    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
+    canUseNotifications() ? Notification.permission : 'unsupported'
   );
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(profile));
+  const sendWateringNotification = async (alarm: WateringAlarm) => {
+    if (!canUseNotifications() || Notification.permission !== 'granted') {
+      return;
     }
-  }, [profile]);
+
+    const targetPlant = plantsData.find((plant) => plant.id === alarm.plantId);
+    const plantName = targetPlant?.name ?? 'your plant';
+    const title = `Watering reminder for ${plantName}`;
+    const body = `${plantName} needs water now. Keep your garden healthy by watering on time.`;
+    const options: NotificationOptions = {
+      body,
+      icon: '/favicon.png',
+      badge: '/favicon.png',
+      tag: `leaforra-watering-${alarm.id}-${getTodayKey()}`,
+      data: {
+        url: '/my-garden',
+        plantId: alarm.plantId,
+        alarmId: alarm.id,
+      },
+    };
+
+    if ('serviceWorker' in navigator) {
+      try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (registration) {
+          await registration.showNotification(title, options);
+          return;
+        }
+      } catch {
+        // Fall through to window notifications when SW notifications are unavailable.
+      }
+    }
+
+    new Notification(title, options);
+  };
+
+  useEffect(() => {
+    if (!profile?.id) {
+      setHasLoadedRemotePlants(true);
+      return;
+    }
+
+    let isActive = true;
+
+    fetchOwnedPlants(profile.id)
+      .then((remotePlants) => {
+        if (!isActive) {
+          return;
+        }
+        setOwnedPlantIds(remotePlants);
+        setHasLoadedRemotePlants(true);
+      })
+      .catch(() => {
+        if (!isActive) {
+          return;
+        }
+        setHasLoadedRemotePlants(true);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [profile?.id]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(STORAGE_KEYS.ownedPlants, JSON.stringify(ownedPlantIds));
     }
-  }, [ownedPlantIds]);
+
+    if (!profile?.id || !hasLoadedRemotePlants) {
+      return;
+    }
+
+    persistOwnedPlants(profile.id, ownedPlantIds).catch(() => {
+      // Keep local state as fallback if persistence fails.
+    });
+  }, [hasLoadedRemotePlants, ownedPlantIds, profile?.id]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(STORAGE_KEYS.alarms, JSON.stringify(alarms));
     }
   }, [alarms]);
+
+  useEffect(() => {
+    if (!canUseNotifications()) {
+      setNotificationPermission('unsupported');
+      return;
+    }
+
+    const syncPermission = () => setNotificationPermission(Notification.permission);
+
+    syncPermission();
+    window.addEventListener('focus', syncPermission);
+    document.addEventListener('visibilitychange', syncPermission);
+
+    return () => {
+      window.removeEventListener('focus', syncPermission);
+      document.removeEventListener('visibilitychange', syncPermission);
+    };
+  }, []);
 
   const ownedPlants = useMemo(
     () => plantsData.filter((plant) => ownedPlantIds.includes(plant.id)),
@@ -148,25 +239,30 @@ export function MyGardenPage() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      const currentTime = getCurrentTimeKey();
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
       const todayKey = getTodayKey();
 
       setAlarms((previousAlarms) => {
         let changed = false;
 
         const nextAlarms = previousAlarms.map((alarm) => {
-          if (!alarm.enabled || alarm.time !== currentTime || alarm.lastTriggeredDate === todayKey) {
+          if (!alarm.enabled || alarm.lastTriggeredDate === todayKey) {
             return alarm;
           }
 
-          const targetPlant = plantsData.find((plant) => plant.id === alarm.plantId);
-          if (notificationPermission === 'granted' && typeof window !== 'undefined' && 'Notification' in window) {
-            new Notification('Watering Reminder', {
-              body: `Time to water ${targetPlant?.name ?? 'your plant'}.`,
-              icon: '/favicon.ico',
-            });
+          const alarmMinutes = toMinutes(alarm.time);
+          if (alarmMinutes === null || currentMinutes < alarmMinutes) {
+            return alarm;
           }
 
+          // Do not consume the reminder unless a notification can actually be shown.
+          if (notificationPermission !== 'granted') {
+            return alarm;
+          }
+
+          void sendWateringNotification(alarm);
+          appendWateringLogDay(todayKey);
           changed = true;
           return { ...alarm, lastTriggeredDate: todayKey };
         });
@@ -178,32 +274,8 @@ export function MyGardenPage() {
     return () => window.clearInterval(timer);
   }, [notificationPermission]);
 
-  const handleRegister = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setFormError('');
-
-    const cleanName = formName.trim();
-    const cleanPhone = formPhone.trim();
-    const cleanEmail = formEmail.trim();
-
-    const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail);
-    const phoneDigits = cleanPhone.replace(/\D/g, '');
-    const isPhoneValid = phoneDigits.length >= 10;
-
-    if (!cleanName || !isPhoneValid || !isEmailValid) {
-      setFormError('Enter a valid name, phone number, and email to continue.');
-      return;
-    }
-
-    setProfile({
-      name: cleanName,
-      phone: cleanPhone,
-      email: cleanEmail,
-    });
-  };
-
   const handleRequestNotificationPermission = async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
+    if (!canUseNotifications()) {
       setNotificationPermission('unsupported');
       return;
     }
@@ -251,66 +323,13 @@ export function MyGardenPage() {
     setAlarms((previous) => previous.filter((alarm) => alarm.id !== alarmId));
   };
 
-  if (!profile) {
-    return (
-      <div className="min-h-screen pt-32 pb-20 bg-[#F8F5EE]">
-        <div className="max-w-2xl mx-auto px-6 lg:px-20">
-          <div className="bg-white rounded-3xl shadow-xl p-8 md:p-10">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-full bg-[#C8E6D4] flex items-center justify-center">
-                <UserRound className="w-6 h-6 text-[#1E3D2F]" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-display font-bold text-[#1E3D2F]">My Garden</h1>
-                <p className="text-[#6B7C6E]">Register to start managing your plants and reminders.</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleRegister} className="space-y-4">
-              <FormInput
-                label="Name"
-                placeholder="Enter your full name"
-                value={formName}
-                onChange={(event) => setFormName(event.target.value)}
-                required
-              />
-              <FormInput
-                label="Phone"
-                placeholder="Enter your phone number"
-                value={formPhone}
-                onChange={(event) => setFormPhone(event.target.value)}
-                required
-              />
-              <FormInput
-                type="email"
-                label="Email"
-                placeholder="Enter your email"
-                value={formEmail}
-                onChange={(event) => setFormEmail(event.target.value)}
-                required
-              />
-
-              {formError && (
-                <p className="text-sm text-red-600">{formError}</p>
-              )}
-
-              <Button type="submit" className="w-full">
-                Register and Continue
-              </Button>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen pt-32 pb-20 bg-[#F8F5EE]">
       <div className="max-w-7xl mx-auto px-6 lg:px-20 space-y-8">
         <div className="bg-white rounded-3xl shadow-xl p-8">
           <h1 className="text-4xl md:text-5xl font-display font-bold text-[#1E3D2F] mb-3">My Garden</h1>
           <p className="text-[#6B7C6E]">
-            Welcome, <span className="font-semibold text-[#1E3D2F]">{profile.name}</span>. Manage your plant collection and watering reminders here.
+            Welcome, <span className="font-semibold text-[#1E3D2F]">{profile?.name ?? 'Gardener'}</span>. Manage your plant collection and watering reminders here.
           </p>
         </div>
 
@@ -390,6 +409,9 @@ export function MyGardenPage() {
             <p className="text-sm text-[#1E3D2F] mb-2">Browser notifications</p>
             <p className="text-sm text-[#6B7C6E] mb-3">
               Permission status: <span className="font-medium capitalize">{notificationPermission}</span>
+            </p>
+            <p className="text-xs text-[#6B7C6E] mb-3">
+              Mobile browsers require this site to stay open in a tab or installed as a home-screen app for reliable reminder delivery.
             </p>
             <Button
               onClick={handleRequestNotificationPermission}

@@ -8,9 +8,10 @@ interface NotificationItemProps {
   message: string;
   time: string;
   isRead?: boolean;
+  onClear?: () => void;
 }
 
-export function NotificationItem({ type, message, time, isRead = false }: NotificationItemProps) {
+export function NotificationItem({ type, message, time, isRead = false, onClear }: NotificationItemProps) {
   const icons = {
     'care-tip': Leaf,
     'watering': Droplets,
@@ -43,6 +44,15 @@ export function NotificationItem({ type, message, time, isRead = false }: Notifi
         <p className="text-sm text-[#1C2B1E] mb-1">{message}</p>
         <p className="text-xs text-[#6B7C6E]">{time}</p>
       </div>
+      {onClear && (
+        <button
+          onClick={onClear}
+          className="text-xs text-[#6B7C6E] hover:text-[#1E3D2F] transition-colors"
+          aria-label="Clear notification"
+        >
+          Clear
+        </button>
+      )}
       {!isRead && (
         <div className="w-2 h-2 bg-[#52A974] rounded-full flex-shrink-0 mt-2" />
       )}

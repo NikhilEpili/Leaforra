@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { Leaf, MessageCircle, Sparkles, X } from 'lucide-react';
 
+type PlantProblemsChatbotProps = {
+  defaultOpen?: boolean;
+};
+
 type ProblemEntry = {
   question: string;
   answer: string;
@@ -143,8 +147,8 @@ If the plant is healthy but still not flowering, check whether that species natu
   },
 ];
 
-export function PlantProblemsChatbot() {
-  const [isOpen, setIsOpen] = useState(false);
+export function PlantProblemsChatbot({ defaultOpen = false }: PlantProblemsChatbotProps) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   const [activeQuestion, setActiveQuestion] = useState(PROBLEM_GUIDE[0].question);
 
   const selected = PROBLEM_GUIDE.find((entry) => entry.question === activeQuestion) ?? PROBLEM_GUIDE[0];

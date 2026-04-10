@@ -1,14 +1,25 @@
-import { useParams, Link } from 'react-router';
+import { useEffect, useState } from 'react';
+import { useParams, Link, useNavigate } from 'react-router';
 import { motion } from 'motion/react';
 import { ArrowLeft, Droplets, FlaskConical, Flower2, Sun, Thermometer } from 'lucide-react';
 import { CareTag } from '../components/CareTag';
 import { Button } from '../components/Button';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { plantsData } from '../data/plants';
+import { fetchOwnedPlants, getRegisteredUser, persistOwnedPlants } from '../auth';
+
+const OWNED_PLANTS_STORAGE_KEY = 'leaforra.garden.ownedPlants';
 
 export function PlantDetailPage() {
+  const navigate = useNavigate();
   const { id } = useParams();
+  const [isAddingToGarden, setIsAddingToGarden] = useState(false);
+  const [addStatusMessage, setAddStatusMessage] = useState<string | null>(null);
   const plant = plantsData.find(p => p.id === id);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [id]);
 
   const guideCards = plant?.guide
     ? [
@@ -69,6 +80,39 @@ export function PlantDetailPage() {
       </div>
     );
   }
+
+  const handleAddToGarden = async () => {
+    if (!plant) {
+      return;
+    }
+
+    const currentUser = getRegisteredUser();
+    if (!currentUser?.id) {
+      navigate('/register');
+      return;
+    }
+
+    setIsAddingToGarden(true);
+    setAddStatusMessage(null);
+
+    try {
+      const serverOwnedPlants = await fetchOwnedPlants(currentUser.id);
+      const alreadyAdded = serverOwnedPlants.includes(plant.id);
+      const updatedOwnedPlants = alreadyAdded
+        ? serverOwnedPlants
+        : [...serverOwnedPlants, plant.id];
+
+      await persistOwnedPlants(currentUser.id, updatedOwnedPlants);
+      window.localStorage.setItem(OWNED_PLANTS_STORAGE_KEY, JSON.stringify(updatedOwnedPlants));
+
+      setAddStatusMessage(alreadyAdded ? 'This plant is already in your garden.' : 'Plant added to your garden.');
+      navigate('/my-garden');
+    } catch {
+      setAddStatusMessage('Could not add this plant right now. Please try again.');
+    } finally {
+      setIsAddingToGarden(false);
+    }
+  };
 
   return (
     <div className="min-h-screen pt-32 pb-20 bg-[#F8F5EE]">
@@ -216,19 +260,25 @@ export function PlantDetailPage() {
               </>
             )}
 
-            {/* Register CTA Card */}
+            {/* Add-to-garden CTA Card */}
             <div className="bg-gradient-to-br from-[#1E3D2F] to-[#3A7D57] rounded-2xl p-8 shadow-xl">
               <h3 className="text-2xl font-display font-semibold text-white mb-2">
-                Register This Plant
+                Add This Plant
               </h3>
               <p className="text-white/90 mb-6">
                 Add this plant to your collection and get personalized care reminders
               </p>
-              <Link to="/qr-landing">
-                <Button variant="pill" className="w-full md:w-auto">
-                  Get Started
-                </Button>
-              </Link>
+              <Button
+                variant="pill"
+                className="w-full md:w-auto"
+                onClick={handleAddToGarden}
+                disabled={isAddingToGarden}
+              >
+                {isAddingToGarden ? 'Adding...' : 'Add to My Garden'}
+              </Button>
+              {addStatusMessage && (
+                <p className="text-sm text-white/90 mt-3">{addStatusMessage}</p>
+              )}
             </div>
           </motion.div>
         </div>
