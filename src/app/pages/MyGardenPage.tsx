@@ -36,6 +36,37 @@ const toMinutes = (time: string) => {
 const canUseNotifications = () =>
   typeof window !== 'undefined' && 'Notification' in window;
 
+const isIOSDevice = () => {
+  if (typeof navigator === 'undefined') {
+    return false;
+  }
+
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
+const isStandaloneDisplayMode = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const iosNavigator = navigator as Navigator & { standalone?: boolean };
+  return window.matchMedia('(display-mode: standalone)').matches || iosNavigator.standalone === true;
+};
+
+const getNotificationCapability = (): NotificationPermission | 'unsupported' | 'requires-install' => {
+  if (canUseNotifications()) {
+    return Notification.permission;
+  }
+
+  // iOS exposes notifications only for Home Screen installed web apps.
+  if (isIOSDevice() && !isStandaloneDisplayMode()) {
+    return 'requires-install';
+  }
+
+  return 'unsupported';
+};
+
 function loadFromStorage<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') {
     return fallback;
@@ -80,9 +111,9 @@ export function MyGardenPage() {
   const [alarmPlantId, setAlarmPlantId] = useState('');
   const [alarmTime, setAlarmTime] = useState('08:00');
 
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(
-    canUseNotifications() ? Notification.permission : 'unsupported'
-  );
+  const [notificationPermission, setNotificationPermission] = useState<
+    NotificationPermission | 'unsupported' | 'requires-install'
+  >(getNotificationCapability());
 
   const sendWateringNotification = async (alarm: WateringAlarm) => {
     if (!canUseNotifications() || Notification.permission !== 'granted') {
@@ -169,8 +200,10 @@ export function MyGardenPage() {
   }, [alarms]);
 
   useEffect(() => {
-    if (!canUseNotifications()) {
-      setNotificationPermission('unsupported');
+    const capability = getNotificationCapability();
+
+    if (capability === 'unsupported' || capability === 'requires-install') {
+      setNotificationPermission(capability);
       return;
     }
 
@@ -275,8 +308,10 @@ export function MyGardenPage() {
   }, [notificationPermission]);
 
   const handleRequestNotificationPermission = async () => {
-    if (!canUseNotifications()) {
-      setNotificationPermission('unsupported');
+    const capability = getNotificationCapability();
+
+    if (capability === 'unsupported' || capability === 'requires-install') {
+      setNotificationPermission(capability);
       return;
     }
 
@@ -415,10 +450,23 @@ export function MyGardenPage() {
             </p>
             <Button
               onClick={handleRequestNotificationPermission}
-              disabled={notificationPermission === 'granted' || notificationPermission === 'unsupported'}
+              disabled={
+                notificationPermission === 'granted'
+                || notificationPermission === 'unsupported'
+                || notificationPermission === 'requires-install'
+              }
             >
-              {notificationPermission === 'granted' ? 'Notifications Enabled' : 'Enable Notifications'}
+              {notificationPermission === 'granted'
+                ? 'Notifications Enabled'
+                : notificationPermission === 'requires-install'
+                  ? 'Install App to Enable Notifications'
+                  : 'Enable Notifications'}
             </Button>
+            {notificationPermission === 'requires-install' && (
+              <p className="text-sm text-amber-700 mt-2">
+                On iPhone, open this site in Safari and use Add to Home Screen. Notifications work from the installed app.
+              </p>
+            )}
             {notificationPermission === 'unsupported' && (
               <p className="text-sm text-red-600 mt-2">This browser does not support notifications.</p>
             )}

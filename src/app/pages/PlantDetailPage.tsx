@@ -10,6 +10,24 @@ import { fetchOwnedPlants, getRegisteredUser, persistOwnedPlants } from '../auth
 
 const OWNED_PLANTS_STORAGE_KEY = 'leaforra.garden.ownedPlants';
 
+function loadOwnedPlantsFromStorage() {
+  if (typeof window === 'undefined') {
+    return [] as string[];
+  }
+
+  const saved = window.localStorage.getItem(OWNED_PLANTS_STORAGE_KEY);
+  if (!saved) {
+    return [] as string[];
+  }
+
+  try {
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
+  } catch {
+    return [] as string[];
+  }
+}
+
 export function PlantDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -87,28 +105,40 @@ export function PlantDetailPage() {
     }
 
     const currentUser = getRegisteredUser();
-    if (!currentUser?.id) {
-      navigate('/register');
-      return;
-    }
 
     setIsAddingToGarden(true);
     setAddStatusMessage(null);
 
+    const localOwnedPlants = loadOwnedPlantsFromStorage();
+    const alreadyAddedLocally = localOwnedPlants.includes(plant.id);
+    const updatedLocalOwnedPlants = alreadyAddedLocally
+      ? localOwnedPlants
+      : [...localOwnedPlants, plant.id];
+
+    if (!alreadyAddedLocally) {
+      window.localStorage.setItem(OWNED_PLANTS_STORAGE_KEY, JSON.stringify(updatedLocalOwnedPlants));
+    }
+
     try {
-      const serverOwnedPlants = await fetchOwnedPlants(currentUser.id);
-      const alreadyAdded = serverOwnedPlants.includes(plant.id);
-      const updatedOwnedPlants = alreadyAdded
-        ? serverOwnedPlants
-        : [...serverOwnedPlants, plant.id];
+      if (currentUser?.id) {
+        const serverOwnedPlants = await fetchOwnedPlants(currentUser.id);
+        const mergedOwnedPlants = Array.from(new Set([...serverOwnedPlants, ...updatedLocalOwnedPlants]));
+        await persistOwnedPlants(currentUser.id, mergedOwnedPlants);
+        window.localStorage.setItem(OWNED_PLANTS_STORAGE_KEY, JSON.stringify(mergedOwnedPlants));
+      }
 
-      await persistOwnedPlants(currentUser.id, updatedOwnedPlants);
-      window.localStorage.setItem(OWNED_PLANTS_STORAGE_KEY, JSON.stringify(updatedOwnedPlants));
-
-      setAddStatusMessage(alreadyAdded ? 'This plant is already in your garden.' : 'Plant added to your garden.');
+      setAddStatusMessage(
+        alreadyAddedLocally ? 'This plant is already in your garden.' : 'Plant added to your garden.'
+      );
       navigate('/my-garden');
     } catch {
-      setAddStatusMessage('Could not add this plant right now. Please try again.');
+      // Local add has already succeeded; backend sync can be retried later.
+      setAddStatusMessage(
+        alreadyAddedLocally
+          ? 'This plant is already in your garden.'
+          : 'Plant added locally. It will sync to your account when server is available.'
+      );
+      navigate('/my-garden');
     } finally {
       setIsAddingToGarden(false);
     }
