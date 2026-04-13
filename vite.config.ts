@@ -238,7 +238,7 @@ export default defineConfig(({ mode }) => {
 
             const apiKey = env.SENDGRID_API_KEY
             const fromEmail = (env.SENDGRID_FROM_EMAIL || '').trim()
-            const toEmail = (env.CONTACT_EMAIL || 'contact@leaforra.com').trim()
+            const toEmail = (env.CONTACT_EMAIL || 'leaforra.contact@gmail.com').trim()
 
             if (!apiKey || !fromEmail) {
               res.statusCode = 500
@@ -278,7 +278,7 @@ export default defineConfig(({ mode }) => {
               }
 
               sgMail.setApiKey(apiKey)
-              await sgMail.send({
+              const [providerResponse] = await sgMail.send({
                 to: toEmail,
                 from: fromEmail,
                 replyTo: cleanEmail,
@@ -293,14 +293,28 @@ export default defineConfig(({ mode }) => {
                 `,
               })
 
+              const messageId =
+                providerResponse?.headers?.['x-message-id'] ||
+                providerResponse?.headers?.['X-Message-Id'] ||
+                null
+
               res.statusCode = 200
               res.setHeader('Content-Type', 'application/json')
-              res.end(JSON.stringify({ success: true }))
+              res.end(JSON.stringify({
+                success: true,
+                accepted: true,
+                toEmail,
+                fromEmail,
+                messageId,
+              }))
             } catch (error) {
               console.error('SendGrid dev middleware error:', error)
               res.statusCode = 500
               res.setHeader('Content-Type', 'application/json')
-              res.end(JSON.stringify({ error: getSendGridErrorMessage(error) }))
+              res.end(JSON.stringify({
+                error: getSendGridErrorMessage(error),
+                details: error?.response?.body?.errors || null,
+              }))
             }
           })
         },

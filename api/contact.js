@@ -40,7 +40,7 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.SENDGRID_API_KEY;
-  const toEmail = (process.env.CONTACT_EMAIL || 'contact@leaforra.com').trim();
+  const toEmail = (process.env.CONTACT_EMAIL || 'leaforra.contact@gmail.com').trim();
   const fromEmail = (process.env.SENDGRID_FROM_EMAIL || '').trim();
 
   if (!apiKey || !fromEmail) {
@@ -67,7 +67,7 @@ export default async function handler(req, res) {
   try {
     sgMail.setApiKey(apiKey);
 
-    await sgMail.send({
+    const [providerResponse] = await sgMail.send({
       to: toEmail,
       from: fromEmail,
       replyTo: cleanEmail,
@@ -82,9 +82,23 @@ export default async function handler(req, res) {
       `,
     });
 
-    sendJson(res, 200, { success: true });
+    const messageId =
+      providerResponse?.headers?.['x-message-id'] ||
+      providerResponse?.headers?.['X-Message-Id'] ||
+      null;
+
+    sendJson(res, 200, {
+      success: true,
+      accepted: true,
+      toEmail,
+      fromEmail,
+      messageId,
+    });
   } catch (error) {
     console.error('SendGrid error:', error);
-    sendJson(res, 500, { error: getSendGridErrorMessage(error) });
+    sendJson(res, 500, {
+      error: getSendGridErrorMessage(error),
+      details: error?.response?.body?.errors || null,
+    });
   }
 }

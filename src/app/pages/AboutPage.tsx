@@ -7,7 +7,7 @@ import { getRegisteredUser } from '../auth';
 
 export function AboutPage() {
   const location = useLocation();
-  const adminContactEmail = import.meta.env.VITE_CONTACT_EMAIL || 'contact@leaforra.com';
+  const adminContactEmail = import.meta.env.VITE_CONTACT_EMAIL || 'leaforra.contact@gmail.com';
   const currentUser = getRegisteredUser();
   const [formData, setFormData] = useState({
     message: '',
@@ -50,14 +50,18 @@ export function AboutPage() {
         }),
       });
 
+      const payload = await response.json().catch(() => null);
+
       if (!response.ok) {
-        const payload = await response.json().catch(() => null);
         throw new Error(payload?.error || 'Failed to send message');
       }
 
+      const sentTo = payload?.toEmail || adminContactEmail;
+      const referenceId = payload?.messageId ? ` Ref: ${payload.messageId}` : '';
+
       setSubmitStatus({
         type: 'success',
-        message: `Message sent successfully to ${adminContactEmail}.`,
+        message: `Message accepted by SendGrid for ${sentTo}.${referenceId}`,
       });
       setFormData({ message: '' });
     } catch (error) {
